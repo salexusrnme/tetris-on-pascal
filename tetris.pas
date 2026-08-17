@@ -7,7 +7,7 @@ type
     end;
     tCord = array [1..4] of tBlock;  //  keeps coordinates of tetromino's blocks
     tTypes = (
-        shapeL, shapeJ, shapeZ, shapeS, //  writes every type of tetromino
+        shapeL, shapeJ, shapeS, shapeZ, //  writes every type of tetromino
         shapeT, shapeI, shapeO
     );
     
@@ -19,15 +19,21 @@ type
         rotation: byte; //  current state of rotation
     end;
 
-const
+    tHold = record
+    {   data structure that keeps info about hold (refer to holdPiece procedure   }
+        isEmpty: boolean;
+        heldPiece: tPiece;
+    end;
+
+const 
     tetromino: array [tTypes] of tCord = (
 
 {   saves coordinates of each block in tetromino    }
 
         ((m: -1; n: 0), (m: 0; n: 0), (m: 1; n: 0), (m: 1; n: 1)),  // L
         ((m: -1; n: 0), (m: 0; n: 0), (m: 1; n: 0), (m: -1; n: 1)), // J
-        ((m: -1; n: 0), (m: 0; n: 0), (m: 0; n: 1), (m: 1; n: 1)),  // Z
-        ((m: 0; n: 0), (m: 1; n: 0), (m: -1; n: 1), (m: 0; n: 1)),  // S
+        ((m: -1; n: 0), (m: 0; n: 0), (m: 0; n: 1), (m: 1; n: 1)),  // S
+        ((m: 0; n: 0), (m: 1; n: 0), (m: -1; n: 1), (m: 0; n: 1)),  // Z
         ((m: -1; n: 0), (m: 0; n: 0), (m: 1; n: 0), (m: 0; n: 1)),  // T
         ((m: -1; n: 0), (m: 0; n: 0), (m: 1; n: 0), (m: 2; n: 0)),  // I
         ((m: 0; n: 0), (m: 1; n: 0), (m: 0; n: 1), (m: 1; n: 1))    // O
@@ -35,10 +41,13 @@ const
 
     errScreenHeight = 'Your terminal must be at least 24 symbols ' +
                       'in height to run this program.';
+    errScreenWidth  = 'Your terminal must be at least 64 symbols ' +
+                      'in width to run this program.';
                       
 var
     gameboard: array [-1..20, 1..10] of char;    //  gameboard[y, x]
     x0, y0: integer;
+    hold: tHold;
     
 procedure GetKey(var code: integer);
 
@@ -96,7 +105,7 @@ begin
 end;
 {$ENDIF}
 
-procedure outputTetr(var piece: tPiece; dy: integer);
+procedure outputTetr(piece: tPiece; dy: integer);
 
 {   outputs tetromino to the gameboard  }
 
@@ -139,7 +148,6 @@ begin
     end
 end;
 
-
 function canPlace(piece: tPiece; dx, dy: integer): boolean;
 
 {   determines if it is possible to shift tetromino placement 
@@ -163,6 +171,33 @@ begin
     canPlace := true
 end;
 
+procedure ghostPiece(piece: tPiece; block: char);
+
+{   procedure works with ghost piece: removes it from the 
+    gameboard and places it back, both happen when piece 
+    moves horizontally or rotates  }
+
+var
+    i, curX, curY: integer;
+
+begin
+    for i := piece.y to 20 do begin
+        if canPlace(piece, 0, 1) then
+            piece.y := piece.y + 1
+        else
+            break
+    end;
+    for i := 1 to 4 do begin
+        curX := piece.x + piece.cords[i].m;
+        curY := piece.y - piece.cords[i].n;
+        if (curY < 1) and (block = '.') then
+            gameboard[curY, curX] := ' '
+        else
+            gameboard[curY, curX] := block
+    end;
+    outputTetr(piece, 0)
+end;
+
 procedure moveTetr(var piece: tPiece; dx, dy: integer; 
                                            var cannotProgress: boolean);
 
@@ -170,6 +205,7 @@ procedure moveTetr(var piece: tPiece; dx, dy: integer;
 
 var
     i, curX, curY: integer;
+    tmp: tPiece;
 
 begin
     for i := 1 to 4 do begin
@@ -181,6 +217,12 @@ begin
             gameboard[curY, curX] := '.'
     end;
     if canPlace(piece, dx, dy) then begin
+        if dx <> 0 then begin
+            tmp := piece;
+            ghostPiece(tmp, '.');
+            tmp.x := tmp.x + dx;
+            ghostPiece(tmp, '0')
+        end;
         for i := 1 to 4 do begin
             curX := piece.x + piece.cords[i].m;
             curY := piece.y - piece.cords[i].n;
@@ -226,13 +268,15 @@ begin
         tmp.cords[i].n := piece.cords[i].m
     end;
     if canPlace(tmp, 0, 0) then begin
+        tmp.rotation := (tmp.rotation + 1) mod 4;
+        ghostPiece(piece, '.');
+        ghostPiece(tmp, '0');
         for i := 1 to 4 do begin
             curX := tmp.x + tmp.cords[i].m;
             curY := tmp.y - tmp.cords[i].n;
             gameboard[curY, curX] := '#'
         end;
         piece := tmp;
-        piece.rotation := (piece.rotation + 1) mod 4;
         if (piece.shape = shapeI) and (piece.rotation = 2) then
             outputLine(piece.y-2);
         if (piece.shape = shapeI) and (piece.rotation = 0) then begin
@@ -251,7 +295,139 @@ begin
     end
 end;
 
+procedure outputHoldTetr(piece: tPiece);
+
+{   places tetromino piece in hold section  }
+
+begin
+    GotoXY(x0-9, y0+1);
+    case piece.shape of
+        shapeL: begin
+            writeln(' . . . #');
+            GotoXY(x0-9, y0+2);
+            writeln(' . # # #')
+        end;
+        shapeJ: begin
+            writeln(' . # . .');
+            GotoXY(x0-9, y0+2);
+            writeln(' . # # #')
+        end;
+        shapeS: begin
+            writeln(' . . # #');
+            GotoXY(x0-9, y0+2);
+            writeln(' . # # .')
+        end;
+        shapeZ: begin
+            writeln(' . # # .');
+            GotoXY(x0-9, y0+2);
+            writeln(' . . # #')
+        end;
+        shapeT: begin
+            writeln(' . . # .');
+            GotoXY(x0-9, y0+2);
+            writeln(' . # # #')
+        end;
+        shapeI: begin
+            writeln(' . . . .');
+            GotoXY(x0-9, y0+2);
+            writeln(' # # # #')
+        end;
+        shapeO: begin
+            writeln(' . . # #');
+            GotoXY(x0-9, y0+2);
+            writeln(' . . # #')
+        end
+    end
+end;
+
+procedure spawnNewTetromino(var piece: tPiece; var cannotSpawn: boolean);
+
+{   places new tetromino on top of the board   }
+
+var
+    curX, curY, i: integer;
+
+begin
+    if not canPlace(piece, 0, 0) then begin
+        cannotSpawn := true;
+        exit
+    end;
+    ghostPiece(piece, '0');
+    for i := 1 to 4 do begin
+        curX := piece.x + piece.cords[i].m;
+        curY := piece.y - piece.cords[i].n;
+        gameboard[curY, curX] := '#'
+    end;
+    outputLine(-1);
+    outputLine(0);
+end;
+
+function generateTetr: tPiece;
+
+{   generates new tetromino piece when called   }
+
+begin
+    generateTetr.shape := tTypes(random(7));
+    generateTetr.cords := tetromino[generateTetr.shape];
+    generateTetr.x := 5;
+    if generateTetr.shape = shapeI then
+        generateTetr.y := -1
+    else
+        generateTetr.y := 0;
+    generateTetr.rotation := 0;
+end;
+
+procedure holdPiece(var piece: tPiece; var hold: tHold);
+
+{   tetris has a hold function, which stores current piece
+    to use it later
+    
+    does exactly that	}
+
+var
+    tmp: tPiece;
+    curX, curY, i: integer;
+    uselessbool: boolean;
+
+begin
+    for i := 1 to 4 do begin
+        curX := piece.x + piece.cords[i].m;
+        curY := piece.y - piece.cords[i].n;
+        if curY < 1 then
+            gameboard[curY, curX] := ' '
+        else
+            gameboard[curY, curX] := '.'
+    end;
+    ghostPiece(piece, '.');
+    outputTetr(piece, 0);
+    uselessbool := false;
+    if not hold.isEmpty then
+        tmp := hold.heldPiece;
+    hold.heldPiece.shape := piece.shape;
+    hold.heldPiece.cords := tetromino[piece.shape];
+    hold.heldPiece.x := 5;
+    if piece.shape = shapeI then
+        hold.heldPiece.y := -1
+    else
+        hold.heldPiece.y := 0;
+    hold.heldPiece.rotation := 0;
+    outputHoldTetr(hold.heldPiece);
+    if hold.isEmpty then begin
+        hold.isEmpty := false;
+        piece := generateTetr;
+        spawnNewTetromino(piece, uselessbool)
+    end
+    else begin
+        piece := tmp;
+        spawnNewTetromino(piece, uselessbool)
+    end
+end;
+
 procedure hardDrop(var piece: tPiece);
+
+{   implementation of hard drop function from tetris as it is - makes
+    tetromino instantly fall and hit either floor or another tetromino  }
+
 var
     i, curX, curY: integer;
 
@@ -279,27 +455,29 @@ begin
     outputTetr(piece, 0)
 end;
 
-
 procedure keyboardInput(var piece: tPiece);
 
 {   gets inputs from keyboard and makes changes for tetromino's position    }
 
 var
-    ms, key: integer;
+    ms, key, tick: integer;
     uselessvar: boolean;
 
 const
-    exitOnEsc = 'You pressed Escape and ended the program.';
+    exitOnX = 'You pressed ''x'' and ended the program.';
     LeftKey = -75;
     DownKey = -80;
     RightKey = -77;
     EscKey = 27;
     SpaceKey = 32;
+    HoldKey = 99;	//  code of 'c'
     RotateKey = 113;    //  code of 'q'
     AltRotateKey = 122; //  code of 'z'
-    
+    ExitKey = 120;      //  code of 'x'    
+
 begin
     ms := 0;
+    tick := 50;
     uselessvar := true; //  this variable doesn't do anything. it only exists for moveTetr's number of parameters
     while ms < 1000 do
     begin
@@ -314,14 +492,25 @@ begin
                     moveTetr(piece, 1, 0, uselessvar);
                 RotateKey, AltRotateKey:
                     rotateTetr(piece);
+                HoldKey:
+                    holdPiece(piece, hold);
                 SpaceKey: begin
                     hardDrop(piece);
-                    ms := 950;
+                    exit
                 end;
                 EscKey: begin
-                    clrscr;
-                    writeln(exitOnEsc);
-                    halt
+                    GotoXY(1, ScreenHeight);
+                    write('Game paused (press ''x'' to exit)');
+                    repeat
+                        GetKey(key);
+                        if key = ExitKey then begin
+                            clrscr;
+                            writeln(exitOnX);
+                            halt
+                        end
+                    until key = EscKey;
+                    GotoXY(1, ScreenHeight);
+                    write('                                 ');
                 end
             end
         end;
@@ -331,15 +520,16 @@ begin
         {$IFDEF DEBUG}
         GotoXY(1, 2);
         writeln('CURSHAPE: ', piece.shape);
-        write('SHAPECORDS: X=', piece.x, ', Y=', piece.y);
-        writeln(' ');
+        writeln('SHAPECORDS:'); 
+        write('X=', piece.x, ', Y=', piece.y);
+        writeln('  ');
         writeln('ROTATION: ', piece.rotation);
         {$ENDIF}
         GotoXY(1, ScreenHeight);
         while KeyPressed do     //  clears input buffer
             ReadKey;
-        delay(50);
-        ms := ms + 50
+        delay(tick);
+        ms := ms + tick
     end
 end;
 
@@ -389,8 +579,22 @@ begin
     end
 end;
 
+procedure writeHold;
 
-procedure initializeGameboard;
+{   rewrites hold section   }
+
+begin
+    GotoXY(x0-10, y0);
+    writeln('+===Hold=');
+    GotoXY(x0-10, y0+1);
+    writeln('! . . . .');
+    GotoXY(x0-10, y0+2);
+    writeln('! . . . .');
+    GotoXY(x0-10, y0+3);
+    writeln('+========')
+end;
+
+procedure initGameboard;
 
 {   draws the gameboard, making borders around it   }
 
@@ -398,7 +602,7 @@ var
     i, j: integer;
 
 const
-    floor = ' +=====================+';
+    floor = '<!=====================!>';
     
 begin
     GotoXY(x0-2, y0);
@@ -409,55 +613,8 @@ begin
         write('!>');
         GotoXY(x0-2, y0+i)
     end;
-    write(floor)
-end;
-
-function continueGame(condY, condX: integer): boolean;
-
-{   game cannot continue if there is no place for another tetromino to appear
-
-    determines if it is possible to continue the game
-    if yes, returns true, if not, returns false }
-
-begin
-    continueGame := gameboard[condY, condX] <> '#';
-end;
-
-procedure spawnNewTetromino(var piece: tPiece; var cannotSpawn: boolean);
-
-{   makes tetromino appear on top of the board  }
-
-var
-    curX, curY, i: integer;
-
-begin
-    for i := 1 to 4 do begin
-        curX := piece.x + piece.cords[i].m;
-        curY := piece.y - piece.cords[i].n;
-        if gameboard[curY, curX] = '#' then begin
-            cannotSpawn := true;
-            exit
-        end
-        else
-            gameboard[curY, curX] := '#'
-    end;
-    outputLine(-1);
-    outputLine(0);
-end;
-
-function generateTetr: tPiece;
-
-{   generates new tetromino piece when called   }
-
-begin
-    generateTetr.shape := tTypes(random(7));
-    generateTetr.cords := tetromino[generateTetr.shape];
-    generateTetr.x := 5;
-    if generateTetr.shape = shapeI then
-        generateTetr.y := -1
-    else
-        generateTetr.y := 0;
-    generateTetr.rotation := 0;
+    write(floor);
+    writeHold
 end;
 
 procedure startGame;
@@ -485,22 +642,25 @@ begin
     write(' move');
     GotoXY(Screenwidth-16, 13);
     write(' Q or Z - rotate');
-    GotoXY(Screenwidth-18, 14);
+    GotoXY(Screenwidth-14, 14);
+    write('C - hold piece');
+    GotoXY(Screenwidth-18, 15);
     write(' Space - hard drop');
-    GotoXY(ScreenWidth-22, 15);
-    write(' Escape - exit program');
+    GotoXY(ScreenWidth-15, 16);
+    write(' Escape - pause');
     {$ENDIF}
-    x0 := (ScreenWidth - 19) div 2;         //  sets start position at which
+    x0 := (ScreenWidth - 20) div 2;         //  sets start position at which
     y0 := (ScreenHeight - 22) div 2 + 2;    //  gameboard is centered
-    for x := 1 to 10 do begin
-        for y := -1 to 0 do
+    for y := -1 to 0 do
+        for x := 1 to 10 do
             gameboard[y, x] := ' ';
-        for y := 1 to 20 do
-            gameboard[y, x] := '.'
-    end;
-    initializeGameboard;
+    for y := 1 to 20 do
+        for x := 1 to 10 do
+            gameboard[y, x] := '.';
+    initGameboard;
     piece := generateTetr;
-    while continueGame(piece.y, piece.x) do begin
+    hold.isEmpty := true;
+    while canPlace(piece, 0, 0) do begin
         cannotSpawnTetr := false;
         spawnNewTetromino(piece, cannotSpawnTetr);
         if cannotSpawnTetr then
@@ -515,12 +675,12 @@ begin
         clearFilledLines;
         piece := generateTetr
     end;
+    GotoXY(1, ScreenHeight);
     delay(1000);
     write('Game Over!');
     delay(2000);
     clrscr
 end;
-
 
 procedure mainMenu();
 
@@ -559,11 +719,14 @@ begin
     end
 end;
 
-
 begin
     if ScreenHeight < 24 then begin
-	writeln(errScreenHeight);
-	halt(1);
+        writeln(errScreenHeight);
+        halt(1);
+    end;
+    if ScreenWidth < 64 then begin
+        writeln(errScreenWidth);
+        halt(1);
     end;
     clrscr;
     {$IF Defined(DEBUG) OR Defined(GAMEBOARD_DEBUG)}
