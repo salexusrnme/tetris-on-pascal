@@ -25,6 +25,8 @@ type
         heldPiece: tPiece;
     end;
 
+    nextArr = array [1..4] of tPiece; //  array that keeps info about next pieces
+
 const 
     tetromino: array [tTypes] of tCord = (
 
@@ -48,6 +50,9 @@ var
     gameboard: array [-1..20, 1..10] of char;    //  gameboard[y, x]
     x0, y0: integer;
     hold: tHold;
+    {$IFDEF Windows}
+    ScreenHeight, ScreenWidth: integer;
+    {$ENDIF}
     
 procedure GetKey(var code: integer);
 
@@ -377,7 +382,76 @@ begin
     generateTetr.rotation := 0;
 end;
 
-procedure holdPiece(var piece: tPiece; var hold: tHold);
+
+procedure outputNext(ar: nextArr);
+
+{   places tetromino pieces in next section   }
+
+var
+    i: integer;
+
+begin
+    for i := 1 to 4 do begin
+        GotoXY(x0+22, y0+1+(i-1)*3);
+        case ar[i].shape of
+            shapeL: begin
+                writeln('. . # .');
+                GotoXY(x0+22, y0+2+(i-1)*3);
+                writeln('# # # .')
+            end;
+            shapeJ: begin
+                writeln('# . . .');
+                GotoXY(x0+22, y0+2+(i-1)*3);
+                writeln('# # # .')
+            end;
+            shapeS: begin
+                writeln('. # # .');
+                GotoXY(x0+22, y0+2+(i-1)*3);
+                writeln('# # . .')
+            end;
+            shapeZ: begin
+                writeln('# # . .');
+                GotoXY(x0+22, y0+2+(i-1)*3);
+                writeln('. # # .')
+            end;
+            shapeT: begin
+                writeln('. # . .');
+                GotoXY(x0+22, y0+2+(i-1)*3);
+                writeln('# # # .')
+            end;
+            shapeI: begin
+                writeln('. . . .');
+                GotoXY(x0+22, y0+2+(i-1)*3);
+                writeln('# # # #')
+            end;
+            shapeO: begin
+                writeln('# # . .');
+                GotoXY(x0+22, y0+2+(i-1)*3);
+                writeln('# # . .')
+            end
+        end
+    end
+end;
+
+procedure updateNext(var ar: NextArr; piece: tPiece);
+
+{   updates the queue of next pieces
+
+    also gets rid of bad random of next pieces  }
+
+begin
+    ar[1] := ar[2];
+    ar[2] := ar[3];
+    ar[3] := ar[4];
+    repeat
+        ar[4] := generateTetr
+    until (ar[4].shape <> piece.shape) and (ar[4].shape <> ar[1].shape)
+        and (ar[4].shape <> ar[3].shape);  {  new piece is random and is 
+    not equal to current, next and postnext pieces   }
+    outputNext(ar)
+end;
+
+procedure holdPiece(var piece: tPiece; var hold: tHold; var ar: NextArr);
 
 {   tetris has a hold function, which stores current piece
     to use it later
@@ -414,7 +488,8 @@ begin
     outputHoldTetr(hold.heldPiece);
     if hold.isEmpty then begin
         hold.isEmpty := false;
-        piece := generateTetr;
+        piece := ar[1];
+        updateNext(ar, piece);
         spawnNewTetromino(piece, uselessbool)
     end
     else begin
@@ -455,7 +530,7 @@ begin
     outputTetr(piece, 0)
 end;
 
-procedure keyboardInput(var piece: tPiece; lvl: integer);
+procedure keyboardInput(var piece: tPiece; lvl: integer; var ar: nextArr);
 
 {   gets inputs from keyboard and makes changes for tetromino's position    }
 
@@ -489,7 +564,7 @@ begin
     if canPlace(piece, 0, 1) then
         speed := 1000 div lvl
     else
-        speed := 500;
+        speed := 500;   //  time given to lock the piece on ground
     uselessvar := true; //  this variable doesn't do anything. it only exists for moveTetr's number of parameters
     while ms < speed do
     begin
@@ -505,7 +580,7 @@ begin
                 RotateKey, AltRotateKey:
                     rotateTetr(piece);
                 HoldKey:
-                    holdPiece(piece, hold);
+                    holdPiece(piece, hold, ar);
                 SpaceKey: begin
                     hardDrop(piece);
                     exit
@@ -535,7 +610,7 @@ begin
                 gameboard[curY, curX] := '.'
         end;
         if canPlace(piece, 0, 1) then
-            speed := 1000 div lvl;
+            speed := 1000 div lvl;   //  unlocks the piece if it can fall
         {$IFDEF GAMEBOARD_DEBUG}
         gameboard_debug();
         {$ENDIF}
@@ -548,6 +623,11 @@ begin
         writeln('ROTATION: ', piece.rotation);
         writeln('LEVEL: ', lvl);
         writeln('SPEED: ', speed, ' ');
+        writeln('NEXT:');
+        writeln('1: ', ar[1].shape);
+        writeln('2: ', ar[2].shape);
+        writeln('3: ', ar[3].shape);
+        writeln('4: ', ar[4].shape);
         {$ENDIF}
         GotoXY(1, ScreenHeight);
         while KeyPressed do     //  clears input buffer
@@ -600,13 +680,17 @@ begin
             outputLine(0);
             outputLine(-1);
             lines := lines + 1;
+            GotoXY(x0-4, y0+17);
+            writeln(lines);
+            GotoXY(x0-4, y0+19);
+            writeln(lines div 10 + 1);
         end
     end
 end;
 
 procedure writeHold;
 
-{   rewrites hold section   }
+{   writes hold section   }
 
 begin
     GotoXY(x0-10, y0);
@@ -619,6 +703,39 @@ begin
     writeln('+========')
 end;
 
+procedure writeNext;
+
+{   write next pieces' section	}
+
+begin
+    GotoXY(x0+22, y0);
+    writeln('=Next===+');
+    GotoXY(x0+22, y0+1);
+    writeln('. . . . !');
+    GotoXY(x0+22, y0+2);
+    writeln('. . . . !');
+    GotoXY(x0+22, y0+3);
+    writeln('        !');
+    GotoXY(x0+22, y0+4);
+    writeln('. . . . !');
+    GotoXY(x0+22, y0+5);
+    writeln('. . . . !');
+    GotoXY(x0+22, y0+6);
+    writeln('        !');
+    GotoXY(x0+22, y0+7);
+    writeln('. . . . !');
+    GotoXY(x0+22, y0+8);
+    writeln('. . . . !');
+    GotoXY(x0+22, y0+9);
+    writeln('        !');
+    GotoXY(x0+22, y0+10);
+    writeln('. . . . !');
+    GotoXY(x0+22, y0+11);
+    writeln('. . . . !');
+    GotoXY(x0+22, y0+12);
+    writeln('========+');
+end;
+
 procedure initGameboard;
 
 {   draws the gameboard, making borders around it   }
@@ -627,19 +744,28 @@ var
     i, j: integer;
 
 const
-    floor = '<!=====================!>';
+    floor = '!=====================!';
     
 begin
-    GotoXY(x0-2, y0);
+    GotoXY(x0-1, y0);
     for i := 1 to 20 do begin
-        write('<! ');
+        write('! ');
         for j := 1 to 10 do
             write(gameboard[i, j] + ' ');
-        write('!>');
-        GotoXY(x0-2, y0+i)
+        write('!');
+        GotoXY(x0-1, y0+i)
     end;
     write(floor);
-    writeHold
+    writeHold;
+    writeNext;
+    GotoXY(x0-6, y0+16);
+    writeln('lines');
+    GotoXY(x0-4, y0+17);
+    writeln(0);
+    GotoXY(x0-4, y0+18);
+    writeln('lvl');
+    GotoXY(x0-4, y0+19);
+    writeln(1)
 end;
 
 procedure startGame;
@@ -650,6 +776,7 @@ var
     piece: tPiece;
     cannotSpawnTetr, cycleBroken: boolean;
     x, y, clearedLines, lvl: integer;
+    nextQueue: nextArr;
 
 begin
     clrscr;
@@ -659,20 +786,20 @@ begin
     writeln('DEBUG MODE');
     {$ENDIF}
     {$IF not Defined(DEBUG) AND not Defined(GAMEBOARD_DEBUG)}
-    GotoXY(ScreenWidth-16, 10);
+    {GotoXY(ScreenWidth-16, 10);
     write(' Basic controls: ');
     GotoXY(ScreenWidth-25, 11);
     write(' Down/Left/Right arrows - ');
     GotoXY(ScreenWidth-5, 12);
     write(' move');
-    GotoXY(Screenwidth-16, 13);
+    GotoXY(Screenwidth-16, 13);		to be placed before start section
     write(' Q or Z - rotate');
     GotoXY(Screenwidth-14, 14);
     write('C - hold piece');
     GotoXY(Screenwidth-18, 15);
     write(' Space - hard drop');
     GotoXY(ScreenWidth-15, 16);
-    write(' Escape - pause');
+    write(' Escape - pause');}
     {$ENDIF}
     x0 := (ScreenWidth - 20) div 2;         //  sets start position at which
     y0 := (ScreenHeight - 22) div 2 + 2;    //  gameboard is centered
@@ -684,17 +811,22 @@ begin
             gameboard[y, x] := '.';
     initGameboard;
     piece := generateTetr;
+    nextQueue[1] := generateTetr;
+    nextQueue[2] := generateTetr;
+    nextQueue[3] := generateTetr;
+    nextQueue[4] := generateTetr;
     hold.isEmpty := true;
     clearedLines := 0;
     lvl := 1;
     while canPlace(piece, 0, 0) do begin
+        updateNext(nextQueue, piece);
         cannotSpawnTetr := false;
         spawnNewTetromino(piece, cannotSpawnTetr);
         if cannotSpawnTetr then
             break;
         cycleBroken := false;
         while piece.y < 21 do begin
-            keyboardInput(piece, lvl);
+            keyboardInput(piece, lvl, nextQueue);
             moveTetr(piece, 0, 1, cycleBroken);
             if cycleBroken then begin
                 break
@@ -702,7 +834,7 @@ begin
         end;
         clearFilledLines(clearedLines);
         lvl := clearedLines div 10 + 1;
-        piece := generateTetr
+        piece := nextQueue[1]
     end;
     GotoXY(1, ScreenHeight);
     delay(1000);
@@ -711,7 +843,7 @@ begin
     clrscr
 end;
 
-procedure mainMenu();
+procedure mainMenu;
 
 {   shows main menu at the start of the program and displays options    }
 
@@ -719,6 +851,10 @@ var
     c: char;
 
 begin
+    {$IF Defined(DEBUG) OR Defined(GAMEBOARD_DEBUG)}
+    GotoXY(1, 13);
+    writeln('DEBUG MODE');
+    {$ENDIF}
     while true do begin
         GotoXY(1, 1);
         writeln('######## ######## ######## ########  ####  ######  ');
@@ -749,6 +885,10 @@ begin
 end;
 
 begin
+    {$IFDEF Windows}
+    ScreenWidth := WindMaxX;
+    ScreenHeight := WindMaxY;
+    {$ENDIF}
     if ScreenHeight < 24 then begin
         writeln(errScreenHeight);
         halt(1);
@@ -758,9 +898,5 @@ begin
         halt(1);
     end;
     clrscr;
-    {$IF Defined(DEBUG) OR Defined(GAMEBOARD_DEBUG)}
-    GotoXY(1, 13);
-    writeln('DEBUG MODE');
-    {$ENDIF}
     mainMenu
 end.
