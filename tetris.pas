@@ -382,7 +382,6 @@ begin
     generateTetr.rotation := 0;
 end;
 
-
 procedure outputNext(ar: nextArr);
 
 {   places tetromino pieces in next section   }
@@ -446,7 +445,7 @@ begin
     repeat
         ar[4] := generateTetr
     until (ar[4].shape <> piece.shape) and (ar[4].shape <> ar[1].shape)
-        and (ar[4].shape <> ar[3].shape);  {  new piece is random and is 
+        and (ar[4].shape <> ar[2].shape);  {  new piece is random and is 
     not equal to current, next and postnext pieces   }
     outputNext(ar)
 end;
@@ -552,7 +551,7 @@ const
 
 begin
     ms := 0;
-    tick := 50;
+    tick := 10;
     for i := 1 to 4 do begin
         curX := piece.x + piece.cords[i].m;
         curY := piece.y - piece.cords[i].n;
@@ -785,22 +784,6 @@ begin
     GotoXY(1, 1);
     writeln('DEBUG MODE');
     {$ENDIF}
-    {$IF not Defined(DEBUG) AND not Defined(GAMEBOARD_DEBUG)}
-    {GotoXY(ScreenWidth-16, 10);
-    write(' Basic controls: ');
-    GotoXY(ScreenWidth-25, 11);
-    write(' Down/Left/Right arrows - ');
-    GotoXY(ScreenWidth-5, 12);
-    write(' move');
-    GotoXY(Screenwidth-16, 13);		to be placed before start section
-    write(' Q or Z - rotate');
-    GotoXY(Screenwidth-14, 14);
-    write('C - hold piece');
-    GotoXY(Screenwidth-18, 15);
-    write(' Space - hard drop');
-    GotoXY(ScreenWidth-15, 16);
-    write(' Escape - pause');}
-    {$ENDIF}
     x0 := (ScreenWidth - 20) div 2;         //  sets start position at which
     y0 := (ScreenHeight - 22) div 2 + 2;    //  gameboard is centered
     for y := -1 to 0 do
@@ -874,8 +857,19 @@ begin
             c := ReadKey;
         until c in ['1', '0'];
         case c of
-            '1':
-                startGame;
+            '1': begin
+                clrscr;
+                GotoXY(1, 2);
+                writeln('Basic controls: ');
+                writeln('Down/Left/Right arrows - move');
+                writeln('Q or Z - rotate');
+                writeln('C - hold piece');
+                writeln('Space - hard drop');
+                writeln('Escape - pause');
+                write(^J'Press any key to start the game');
+                ReadKey;
+                startGame
+            end;
             '0': begin
                 clrscr;
                 halt
